@@ -4347,6 +4347,15 @@ proc cmdModuleInit {args} {
    }
 }
 
+proc cmdModuleImm {args} {
+   pushMode "load"
+
+   #puts stderr $args
+   eval $args
+
+   popMode
+}
+
 proc cmdModuleHelp {args} {
    global MODULES_CURRENT_VERSION MODULES_CURRENT_RELEASE_DATE
 
@@ -4421,6 +4430,12 @@ proc cmdModuleHelp {args} {
       report {  initclear                         Clear all modulefiles\
          from init file}
       report {}
+      report {Module commands available from the command line:}
+      report {  prepend-path    VAR PATH [separator]}
+      report {  append-path     VAR PATH [separator]}
+      report {  remove-path     VAR PATH [separator]}
+      report {                                    Path-like variable\
+         manipulation}
       report {Other commands:}
       report {  help            [modulefile ...]  Print this or\
          modulefile(s) help info}
@@ -4556,8 +4571,16 @@ if {[catch {
       }
    }
 
-   # eval needed to pass otherargv as list to module proc
-   eval module $command $otherargv
+   switch -regexp -- $command {
+      {^(prepend|append|remove)-path$} {
+         eval cmdModuleImm $command $otherargv
+         renderSettings
+      }
+      . {
+         # eval needed to pass otherargv as list to module proc
+         eval module $command $otherargv
+      }
+   }
 } errMsg ]} {
    # no use of reportError here to get independent from any
    # previous error report inhibition
