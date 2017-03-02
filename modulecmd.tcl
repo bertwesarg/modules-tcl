@@ -231,6 +231,7 @@ proc unset-env {var} {
 proc execute-modulefile {modfile {exit_on_error 1}} {
    global g_debug g_inhibit_interp g_inhibit_errreport
    global ModulesCurrentModulefile
+   global g_moduleProcs g_moduleVars
 
    set ModulesCurrentModulefile $modfile
 
@@ -284,6 +285,15 @@ proc execute-modulefile {modfile {exit_on_error 1}} {
       interp eval $slave [list "set" "g_inhibit_errreport"\
          $g_inhibit_errreport]
 
+      foreach name [array names g_moduleProcs] {
+         foreach {argl body} $g_moduleProcs($name) {}
+         reportDebug "execute-modulefile:  Export module procedure $name"
+         interp eval $slave [list proc $name $argl $body]
+      }
+      foreach name [array names g_moduleVars] {
+         reportDebug "execute-modulefile:  Export variable $name"
+         interp eval $slave [list set $name $g_moduleVars($name)]
+      }
    }
    set errorVal [interp eval $slave {
       if {$g_debug} {
@@ -348,7 +358,7 @@ proc execute-modulefile {modfile {exit_on_error 1}} {
 
 # Smaller subset than main module load... This function runs modulerc and
 # .version files
-proc execute-modulerc {modfile {exit_on_error 1}} {
+proc execute-modulerc {modfile {exit_on_error 1} {allow_exports {0}}} {
    global g_rcfilesSourced ModulesVersion
    global g_debug g_moduleDefault g_inhibit_errreport
    global ModulesCurrentModulefile
@@ -375,6 +385,10 @@ proc execute-modulerc {modfile {exit_on_error 1}} {
          interp alias $slave chdir {} chdir
          interp alias $slave module-version {} module-version
          interp alias $slave module-alias {} module-alias
+         if {$allow_exports} {
+            interp alias $slave module-proc {} module-proc
+            interp alias $slave module-set {} module-set
+         }
          interp alias $slave module {} module
          interp alias $slave module-info {} module-info
          interp alias $slave module-trace {} module-trace
@@ -696,6 +710,25 @@ proc module-alias {args} {
    }
 
    return {}
+}
+
+proc module-proc {name args body} {
+   global g_moduleProcs
+   reportDebug "DEBUG module-proc: $name {$args}"
+   if {![info exists g_moduleProcs($name)]} {
+      set g_moduleProcs($name) [list $args $body]
+      #eval [list proc $name $args $body]
+   } else {
+      reportDebug "module-proc: duplicate $name"
+   }
+}
+
+proc module-set {name value} {
+   global g_moduleVars
+   reportDebug "module-set: $name"
+   if {![info exists g_moduleVars($name)]} {
+      set g_moduleVars($name) $value
+   }
 }
 
 proc module {command args} {
@@ -1808,6 +1841,17 @@ proc getPathToModule {mod} {
          set path "$dir/$mod"
          set modparentpath "$dir/$modparent"
 
+         if {[file exists "$dir/.modulepathrc"]} {
+            reportDebug "getPathToModule: Found\
+               $dir/.modulepathrc"
+            # push name to be found by module-alias and version
+            pushSpecifiedName $dir/.modulepathrc
+            pushModuleName $dir/.modulepathrc
+            execute-modulerc $dir/.modulepathrc 1 1
+            popModuleName
+            popSpecifiedName
+         }
+
          # Search all parent directories (between modulepath dir and mod)
          # for .modulerc files in case we need to translate an alias
          set parentlist [split $mod "/"]
@@ -2821,6 +2865,9 @@ proc listModules {dir mod {show_flags {1}} {filter ""} {search "in_depth"}} {
 
       set dir [glob $dir]
       set full_list [glob -nocomplain "$dir/$mod*"]
+      if {[file readable $dir/.modulepathrc]} {
+         set full_list [linsert $full_list 0 $dir/.modulepathrc]
+      }
 
       # remove trailing / needed on some platforms
       regsub {\/$} $full_list {} full_list
@@ -2908,6 +2955,16 @@ proc listModules {dir mod {show_flags {1}} {filter ""} {search "in_depth"}} {
             show_flags_dir=$show_flags_dir show_flags_mf=$show_flags_mf\
             show_mtime=$show_mtime"
          switch -glob -- $tail {
+            {.modulepathrc} {
+               # push name to be found by module-alias and version
+               pushSpecifiedName $modulename
+               pushModuleName $modulename
+               # set is needed for execute-modulerc
+               set ModulesCurrentModulefile $element
+               execute-modulerc $element 1 1
+               popModuleName
+               popSpecifiedName
+            }
             {.modulerc} {
                # push name to be found by module-alias and version
                pushSpecifiedName $modulename
