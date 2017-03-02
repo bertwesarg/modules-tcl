@@ -732,6 +732,8 @@ proc module-set {name value} {
 }
 
 proc module {command args} {
+   global show_oneperline
+
    set mode [currentMode]
 
    # guess if called from top level
@@ -3192,7 +3194,11 @@ proc displayElementList {header one_per_line display_idx args} {
 
    # display header if any provided
    if {$header ne "noheader"} {
-      displaySeparatorLine $header
+      if {$one_per_line <= 1} {
+         displaySeparatorLine $header
+      } else {
+         report "$header:"
+      }
    }
 
    # end proc if no element are to print
@@ -3513,18 +3519,22 @@ proc cmdModuleList {} {
    set loadedmodlist [getLoadedModuleList]
 
    if {[llength $loadedmodlist] == 0} {
-      report "No Modulefiles Currently Loaded."
+      if {!$show_oneperline} {
+         report "No Modulefiles Currently Loaded."
+      }
    } else {
       set list {}
       if {$show_modtimes} {
          report "- Package -----------------------------.- Versions\
             --------.- Last mod. -------"
+      }\
+      elseif {!$show_oneperline} {
+         report "Currently Loaded Modulefiles:"
       }
-      report "Currently Loaded Modulefiles:"
       set display_list {}
       if {$show_modtimes || $show_oneperline} {
          set display_idx 0
-         set one_per_line 1
+         set one_per_line [expr {1 + $show_oneperline}]
       } else {
          set display_idx 1
          set one_per_line 0
@@ -4070,7 +4080,7 @@ proc cmdModuleReload {} {
 }
 
 proc cmdModuleAliases {} {
-   global g_moduleAlias g_moduleVersion
+   global g_moduleAlias g_moduleVersion show_oneperline
 
    # disable error reporting to avoid modulefile errors
    # to mix with avail results
@@ -4088,12 +4098,13 @@ proc cmdModuleAliases {} {
 
    reenableErrorReport
 
+   set one_per_line [expr {1 + $show_oneperline}]
    set display_list {}
    foreach name [lsort -dictionary [array names g_moduleAlias]] {
       lappend display_list "$name -> $g_moduleAlias($name)"
    }
    if {[llength $display_list] > 0} {
-      eval displayElementList "Aliases" 1 0 $display_list
+      eval displayElementList "Aliases" $one_per_line 0 $display_list
    }
 
    set display_list {}
@@ -4101,7 +4112,7 @@ proc cmdModuleAliases {} {
       lappend display_list "$name -> $g_moduleVersion($name)"
    }
    if {[llength $display_list] > 0} {
-      eval displayElementList "Versions" 1 0 $display_list
+      eval displayElementList "Versions" $one_per_line 0 $display_list
    }
 }
 
@@ -4109,7 +4120,7 @@ proc cmdModuleAvail {{mod {*}}} {
    global show_oneperline show_modtimes show_filter
 
    if {$show_modtimes || $show_oneperline} {
-      set one_per_line 1
+      set one_per_line [expr {1 + $show_oneperline}]
    } else {
       set one_per_line 0
    }
