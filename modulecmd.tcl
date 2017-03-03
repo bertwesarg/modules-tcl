@@ -3138,7 +3138,7 @@ proc listModules {dir mod {show_flags {1}} {filter ""} {search "in_depth"}} {
                   set mystr [format "%-40s%-20s"\
                      "$mystr -> $g_moduleAlias($alias)" [join $tag_list ":"]]
                } elseif {$show_flags_mf} {
-                  lappend tag_list "@"
+                  lappend tag_list "@$g_moduleAlias($alias)"
                   append mystr "(" [join $tag_list ":"] ")"
                }
                lappend clean_list $mystr
