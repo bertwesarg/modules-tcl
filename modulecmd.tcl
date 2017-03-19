@@ -1985,6 +1985,13 @@ proc getPathToModule {mod} {
                }
             }
          }
+
+         set base_module [file dirname $path]
+         if {[file isdirectory $base_module] && \
+             [file exists [file join $base_module .package]]} {
+            return [list [file join $base_module .package] $mod]
+         }
+
          # File wasn't readable, go to next path
       }
       # End of of foreach loop
